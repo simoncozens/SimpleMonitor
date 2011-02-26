@@ -1,0 +1,6 @@
+#!/usr/bin/perl
+use lib 'lib';
+use SimpleMonitor;
+
+SimpleMonitor->load_config();
+SimpleMonitor->run_checks();
