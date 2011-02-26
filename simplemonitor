@@ -1,6 +1,82 @@
 #!/usr/bin/perl
 use lib 'lib';
 use SimpleMonitor;
+use Plack::Request;
+use Template;
+use File::Slurp;
 
 SimpleMonitor->load_config();
-SimpleMonitor->run_checks();
+if (!caller) { 
+    SimpleMonitor->run_checks();
+    exit;
+}
+
+# From now on, we're a web server
+
+my $template = $SimpleMonitor::config{templatefile} ?
+    read_file($SimpleMonitor::config{templatefile}) :
+    do { local $/; <DATA>; };
+my $css = <<'EOF';
+@import url("http://fonts.googleapis.com/css?family=Droid+Sans:regular,bold");
+html { background: #ffffea; margin-left: 50px; font-family: "Droid Sans",sans-serif; }
+h1,h2 {	text-align: center; } .fail { background: #fbb; } 
+td.res { padding-left: 1em; }
+tr.fail td.res { background: url(data:image/gif;base64,R0lGODlhEAAPAKIHAOrc3eggLfKcoPZPX7Sjo6JUVrIOF/n5+SH5BAEAAAcALAAAAAAQAA8AAANLeLrVvfCQIoAFokRlqvieQUAGBZ6FwRjG4L4uqx0sG9zDXau0ff8/FscALAaEBKKxyFPiXkBe4Qdz/Wa0J+wXoUJvm8O0iA1rHpEEADs=) no-repeat;
+}
+tr.pass td.res { background: url(data:image/gif;base64,R0lGODlhEAAPAKIHAJHXMeD21cXzQaPWhMjotjmrHfn5+fn5+SH5BAEAAAcALAAAAAAQAA8AAANMeLpTNSuuF4wJTapCgv9EIRVAQJwoAYhKAwxwDK/Q4QD4m+POtv85Fgn4E+YEyGRQcUw6cwuAcyoARHBUJE4izVo1B6y2Bj4QDuRIAgA7) no-repeat }
+EOF
+$css = read_file($SimpleMonitor::config{css}) 
+    if -f $SimpleMonitor::config{css};
+
+sub {
+    my $env = shift;
+    my $req = Plack::Request->new($env);
+    my $res = $req->new_response(200);
+    $res->content_type("text/html");
+    my $out;
+    Template->new->process(\$template, { css => $css,
+    SimpleMonitor->status_for_template }, \$out);
+    $res->body($out);
+    $res->finalize;
+}
+
+__DATA__
+<html>
+    <head>
+        <title> SimpleMonitor </title>
+        <style> [% css %] </style>
+    </head>
+    <body>
+        <h1> SimpleMonitor </h1>
+        [% IF warnings.size > 0 %]
+        <div name="warnings">
+            <h2> Current Warnings </h2>
+            <table>
+            [% FOR warn = warnings %]
+            <tr class="[%warn.result%]">    
+                <td class="res">[%warn.result%]</td>
+                <td class="system">[% warn.system |html %]</td>
+                <td class="name">[% warn.name |html %]</td>
+                <td class="message">[% warn.message |html %]</td>
+                <td class="checked">[% USE date; date.format(warn.checked) %] </td>
+            </tr>
+            [%END%]
+            </table>
+        </div>
+        [%END%]
+        <div name="status">
+            <h2> Current Status </h2>
+            <table>
+            [% FOR check = latest %]
+            <tr class="[%check.result%]">    
+                <td class="res">[%check.result%]</td>
+                <td class="system">[% check.system |html %]</td>
+                <td class="name">[% check.name |html %]</td>
+                <td class="message">[% check.message |html %]</td>
+                <td class="checked">[% USE date; date.format(check.checked) %] </td>
+            </tr>
+            [%END%]
+            </table>
+        </div>
+    </body>
+</html>
