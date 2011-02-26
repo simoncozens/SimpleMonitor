@@ -1,0 +1,185 @@
+SimpleMonitor
+=============
+
+The simplest host monitoring software that could possibly work
+--------------------------------------------------------------
+
+If host monitoring is complicated, people won't do it. It needs to be
+simple. SimpleMonitor gives you just enough functionality to do what you
+need, and just enough configurability to do what you want. And nothing
+else.
+
+Installing
+==========
+
+Once you've grabbed a copy of SimpleMonitor, running `perl
+Makefile.PL;make install` will install the required CPAN modules to make
+this run. You will then want to create a new Unix user (or decide upon
+an existing one) who will run the tests. 
+
+If you're going to use SSH to connect to other hosts and check features
+on them, you'll need this user to have the appropriate SSH certificates
+configured for easy passwordless access. 
+
+The user will also need to be able to write to a SQLite database file;
+the default path of this file is `/etc/simplemonitor/results.db`, but I'll
+show you have to change that in a moment.
+
+Configuring
+===========
+
+There are two configuration files used by SimpleMonitor, the main
+configuration file and the checks file. To keep things simple, you only
+need to write the checks file; sensible defaults are provided for the
+main configuration file.
+
+Configuration is written in JSON. This helps keep the code simple by
+keeping parsing simple, and it helps you to generate the checks file
+programmatically by grovelling `/etc/apache2/sites-enabled` directories
+or querying your database of hosted sites and servers or however else
+you organise your life. 
+
+If you need a refresher on how to write JSON, please visit
+http://www.json.org/
+
+The main configuration file
+---------------------------
+
+By default this file lives in `/etc/simplemonitor/simplemonitor.conf`.
+SimpleMonitor will also look in its current directory for a file called
+`simplemonitor.conf` and will use that instead if found. (That should
+keep you on your toes.) This configuation should be a JSON hash, and so
+should start with `{` and end with `}`. The options in the middle can
+include:
+
+* `checksfile` - a file path to the other configuration file. This
+defaults to `/etc/simplemonitor/checks.conf`. It may also be an array
+containing multiple configuration file paths.
+
+* `database` - a file path to the SQLite database used to store the
+results. If this database is not found, a new one will be created in the
+given path. The default is `/etc/simplemonitor/results.db`.
+
+* `mailfrom` - an email address that the system will send event
+notifications from. It defaults to the current user at the current
+hostname.
+
+* `mailto` - an email address that the system will send event
+notifications to. This is the one you probably most want to configure.
+It may also be a comma-separated list of email addresses. It can be
+overridden on a per-check basis. It defaults to `root@localhost`.
+
+* `notify_every` - to stop you getting mercilessly spammed every time a
+check fails, this parameter is the number of seconds to elapse between
+notifications of the same event. It can be overriden on a per-check
+basis. It defaults to 3600, one hour.
+
+* `css` - a path to a CSS file used to pretty up the web interface a
+bit. A fairly ugly built-in CSS stylesheet will be used if this is not
+set.
+
+* `templatefile` - a path to a [Template Toolkit](http://template-toolkit.org/) 
+template used to pretty up the web interface a lot. A built-in template,
+at the end of `simpleconfig` will be used if this is not set. To really
+customize the web interface, copy the built-in template to a spare file,
+learn how to use Template Toolkit (it's fairly simple) and off you go.
+
+The built-in defaults are therefore equivalent to a config like this:
+
+    {
+        "checksfile": "/etc/simplemonitor/checks.conf",
+        "database": "/etc/simplemonitor/results.db",
+        "notify_every": 3600,
+        "mailto": "root@localhost",
+        "mailfrom": "The SimpleMonitor system <you@yourhost>"
+    }
+
+The checks file
+---------------
+
+This is the nuts and bolts of the host monitoring system. A sample
+configuration file is included, let's look at it here:
+
+    [
+        { "url" : "http://www.example.com/" },
+        { "url" : "http://www.example.org/", "expect" : "Example Domains" },
+        { "type": "ping", "system": "www.example.net" },
+        { "type": "ping", "system": "www.nonsuch" }
+    ]
+
+SimpleConfig does its work using check plugins. There are five "core"
+attributes for each check, and the other attributes depend on the
+plugin. The core attributes are:
+
+* `type` - the check plugin to be used. There are currently two defined,
+`ping` and `web`. SimpleConfig is smart, and if an attribute
+unambiguously identifie a particular plugin, you don't need to specify
+it. In the first two instances about, there is a `url` attribute, so it
+knows you're talking about a `web` check.
+
+* `system` - the host to which this check applies. For ping checks, this
+is the host to be pung. For SSH-based checks, this is the host to SSH
+to.
+
+* `mailto` and `notify_every` we have discussed above; these can be
+overridden in checks if required.
+
+* `name` - a name for this check. SimpleConfig plugins try to come up
+with a sensible descriptive one if this is not given.
+
+The `web` plugin has two check-specific attributes. `url` is, rather
+obviously, the URL to be tested. If the `expect` attribute is given, the
+returned content will be tested against this as a regular expression. If
+not, then any content will count as success.
+
+Using
+=====
+
+The `simpleconfig` script can be used in three different ways.
+
+Cron job
+--------
+
+You'll want this. Set up a cron job to run the script every however-many
+minutes, as the simpleconfig user. This runs the checks and sends out
+any notifications required.
+
+    */5 * * * simpleconfig /usr/local/bin/simpleconfig
+
+Command line
+------------
+
+Running simpleconfig from the command line (be careful which user you
+are and if you have permissions to read and write the database) will run
+the checks, send notifications, and tell you how it got on.
+
+Web server
+----------
+
+This shows you the current status and any problems as a result of the
+checks.
+
+There are two different ways you can run the web server. The simplest is
+to run it as a standalone daemon:
+
+    su simpleconfig plackup -a simpleconfig
+
+This gives you a web server running on port 5000 of 127.0.0.1, to which
+you can set up Apache redirects or SSH tunnels or whatever you like for
+access control.
+
+The less simple way is to run it from Apache, although obviously this
+gives you more control over access and where to put it. The technicality
+is getting it to run as the appropriate user, or giving the web server
+permissions to read and write the database. Once you've done that, the
+magic code for your Apache2 config is:
+
+  <Location />
+   SetHandler perl-script
+   PerlHandler Plack::Server::Apache2
+   PerlSetVar psgi_app /usr/local/bin/simpleconfig
+  </Location>
+
+For instructions for other servers, see http://plackperl.org/
+
+That's all. I said it was simple.
