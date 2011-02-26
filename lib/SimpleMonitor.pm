@@ -101,7 +101,7 @@ sub record {
 
 sub notify {
     my ($self, %details) = @_;
-    my $to = $details{check}->{mailto} || $config{mailto}
+    my $to = $details{check}->{mailto} || $config{mailto};
     Email::Send->new->send(<<EOF);
 From: $config{mailfrom}
 To: $config{mailto}
