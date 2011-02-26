@@ -110,6 +110,14 @@ $details{message}
 
 EOF
 }
+
+sub status_for_template { ( 
+    latest => $config{dbh}->selectall_arrayref("SELECT * FROM latest
+    ORDER BY system",{ Slice => {} }),
+    warnings => $config{dbh}->selectall_arrayref("SELECT * FROM warnings
+    ORDER BY system", { Slice => {} })
+) }
+
 __DATA__
 CREATE TABLE latest (checkjson, name, system, checked, result, message);
 CREATE TABLE warnings (checkjson, name, system, checked, result, message, lastnotified);
