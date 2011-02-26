@@ -1,8 +1,6 @@
 #!/usr/bin/perl
 use lib 'lib';
 use SimpleMonitor;
-use Plack::Request;
-use Template;
 use File::Slurp;
 
 SimpleMonitor->load_config();
@@ -12,6 +10,8 @@ if (!caller) {
 }
 
 # From now on, we're a web server
+require Plack::Request;
+require Template;
 
 my $template = $SimpleMonitor::config{templatefile} ?
     read_file($SimpleMonitor::config{templatefile}) :
