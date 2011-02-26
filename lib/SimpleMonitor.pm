@@ -10,7 +10,7 @@ use DBI;
 
 our %config = (
     notify_every => 60*60,
-    notify_user => "root\@localhost",
+    mailto => "root\@localhost",
     mailfrom => "The SimpleMonitor system <".getpwuid($>)."\@".hostfqdn.">",
     database => "/etc/simplemonitor/results.db"
 );
@@ -103,7 +103,7 @@ sub notify {
     my ($self, %details) = @_;
     Email::Send->new->send(<<EOF);
 From: $config{mailfrom}
-To: $config{notify_user}
+To: $config{mailto}
 Subject: SimpleMonitor $details{status} - @{[ $details{check}->name ]}
 
 $details{message}
